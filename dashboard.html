@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEMS — Air Quality Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --sky-1:#0b1622;
+    --sky-2:#0f2436;
+    --sky-3:#123249;
+    --mist:#9fb8c9;
+    --fog:#5f7c8f;
+    --line:rgba(159,184,201,0.14);
+    --good:#5fd3a3;
+    --mid:#f2c14e;
+    --bad:#e8654f;
+    --accent:#3ea8c9;
+    --white:#eef5f8;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(62,168,201,0.16), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(95,211,163,0.08), transparent 55%),
+      linear-gradient(180deg, var(--sky-1), var(--sky-2) 55%, var(--sky-1));
+    color:var(--white);
+    font-family:'Space Grotesk', sans-serif;
+    min-height:100vh;
+    padding:48px 32px 80px;
+  }
+
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:24px;
+    padding-bottom:36px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:40px;
+  }
+
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 10px var(--good);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+  h1{
+    font-size:44px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+    line-height:1.05;
+  }
+  h1 span{color:var(--fog); font-weight:500;}
+
+  .station-id{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    color:var(--mist);
+    text-align:right;
+  }
+  .station-id div:first-child{color:var(--fog); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:6px;}
+
+  /* ---------- verdict banner ---------- */
+  .verdict{
+    display:flex;
+    align-items:center;
+    gap:28px;
+    background:linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:28px 32px;
+    margin-bottom:36px;
+    position:relative;
+    overflow:hidden;
+  }
+  .verdict::before{
+    content:'';
+    position:absolute; inset:0;
+    background:var(--verdict-color, var(--good));
+    opacity:0.06;
+  }
+  .verdict-ring{
+    width:84px;height:84px;
+    border-radius:50%;
+    border:3px solid var(--verdict-color, var(--good));
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    font-family:'JetBrains Mono',monospace;
+    font-size:26px;
+    font-weight:600;
+    color:var(--verdict-color, var(--good));
+    box-shadow:0 0 24px -4px var(--verdict-color, var(--good));
+  }
+  .verdict-text .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--fog);
+    margin-bottom:6px;
+  }
+  .verdict-text .status{
+    font-size:26px;
+    font-weight:600;
+    color:var(--verdict-color, var(--good));
+    margin-bottom:4px;
+  }
+  .verdict-text .sub{font-size:14px;color:var(--mist);}
+
+  /* ---------- metric grid ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:20px;
+    margin-bottom:20px;
+  }
+  @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:520px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px 22px 18px;
+    transition:border-color 0.25s ease, transform 0.25s ease;
+  }
+  .card:hover{border-color:rgba(159,184,201,0.32); transform:translateY(-2px);}
+
+  .card-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:18px;
+  }
+  .card-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--fog);
+  }
+  .card-unit{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--fog);
+    background:rgba(255,255,255,0.05);
+    padding:3px 8px;
+    border-radius:6px;
+  }
+
+  .card-value{
+    font-size:38px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+    line-height:1;
+    margin-bottom:2px;
+    font-variant-numeric:tabular-nums;
+  }
+  .card-delta{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    color:var(--fog);
+    margin-bottom:14px;
+  }
+  .card-delta.up{color:var(--good);}
+  .card-delta.down{color:var(--bad);}
+
+  .chart-box{height:64px; margin-top:6px;}
+
+  /* ---------- footer strip ---------- */
+  .meta-strip{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-top:28px;
+    padding-top:24px;
+    border-top:1px solid var(--line);
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    color:var(--fog);
+  }
+  .meta-strip b{color:var(--mist); font-weight:500;}
+
+  .refresh-tag{
+    display:flex;align-items:center;gap:8px;
+  }
+  .refresh-tag .bar{
+    width:44px;height:3px;background:rgba(255,255,255,0.08);
+    border-radius:3px;overflow:hidden;position:relative;
+  }
+  .refresh-tag .bar::after{
+    content:'';position:absolute;inset:0;background:var(--accent);
+    transform-origin:left;
+    animation:fillbar 3s linear infinite;
+  }
+  @keyframes fillbar{from{transform:scaleX(0);}to{transform:scaleX(1);}}
+
+  .conn-error{
+    display:none;
+    background:rgba(232,101,79,0.1);
+    border:1px solid rgba(232,101,79,0.3);
+    color:var(--bad);
+    padding:14px 18px;
+    border-radius:12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    margin-bottom:24px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow"><span class="dot"></span> LIVE FEED — NODE 01</div>
+      <h1>LEMS<span>.</span> <span>indoor climate station</span></h1>
+    </div>
+    <div class="station-id">
+      <div>Sensor</div>
+      BME680 · ESP32 · I²C 0x76
+    </div>
+  </header>
+
+  <div class="conn-error" id="connError">⚠ NO SIGNAL — cannot reach server at configured address. Check that server.py is running and the IP below matches your machine.</div>
+
+  <div class="verdict" id="verdictBox">
+    <div class="verdict-ring" id="verdictRing">--</div>
+    <div class="verdict-text">
+      <div class="label">Air Quality Verdict</div>
+      <div class="status" id="verdictStatus">Awaiting data…</div>
+      <div class="sub" id="verdictSub">Connecting to sensor node</div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-label">Temperature</div>
+        <div class="card-unit">°C</div>
+      </div>
+      <div class="card-value" id="val-temp">--</div>
+      <div class="card-delta" id="delta-temp">predicted --</div>
+      <div class="chart-box"><canvas id="chart-temp"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-label">Humidity</div>
+        <div class="card-unit">%RH</div>
+      </div>
+      <div class="card-value" id="val-hum">--</div>
+      <div class="card-delta" id="delta-hum">predicted --</div>
+      <div class="chart-box"><canvas id="chart-hum"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-label">Pressure</div>
+        <div class="card-unit">hPa</div>
+      </div>
+      <div class="card-value" id="val-pres">--</div>
+      <div class="card-delta" id="delta-pres">predicted --</div>
+      <div class="chart-box"><canvas id="chart-pres"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-label">Gas Resistance</div>
+        <div class="card-unit">Ω</div>
+      </div>
+      <div class="card-value" id="val-gas">--</div>
+      <div class="card-delta" id="delta-gas">predicted --</div>
+      <div class="chart-box"><canvas id="chart-gas"></canvas></div>
+    </div>
+
+  </div>
+
+  <div class="meta-strip">
+    <div>Source · <b id="serverAddr">http://172.20.10.9:5000</b></div>
+    <div class="refresh-tag"><div class="bar"></div> refreshing every 3s</div>
+  </div>
+
+</div>
+
+<script>
+/* ====== CONFIG ====== */
+const SERVER_URL = "http://172.20.10.9:5000/api/data"; // <-- change to your laptop's IP
+document.getElementById('serverAddr').textContent = SERVER_URL.replace('/api/data','');
+
+/* ====== chart setup ====== */
+Chart.defaults.color = '#5f7c8f';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+
+function makeSparkline(ctx, color){
+  return new Chart(ctx, {
+    type:'line',
+    data:{ labels:[], datasets:[{
+      data:[],
+      borderColor:color,
+      borderWidth:2,
+      pointRadius:0,
+      tension:0.35,
+      fill:true,
+      backgroundColor:(context)=>{
+        const g = context.chart.ctx.createLinearGradient(0,0,0,64);
+        g.addColorStop(0, color+'33');
+        g.addColorStop(1, color+'00');
+        return g;
+      }
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{duration:400},
+      plugins:{ legend:{display:false}, tooltip:{enabled:false} },
+      scales:{
+        x:{ display:false },
+        y:{ display:false }
+      }
+    }
+  });
+}
+
+const charts = {
+  temp: makeSparkline(document.getElementById('chart-temp'), '#e8654f'),
+  hum:  makeSparkline(document.getElementById('chart-hum'),  '#3ea8c9'),
+  pres: makeSparkline(document.getElementById('chart-pres'), '#9b8cf2'),
+  gas:  makeSparkline(document.getElementById('chart-gas'),  '#5fd3a3'),
+};
+
+const MAX_POINTS = 25;
+function pushPoint(chart, value){
+  chart.data.labels.push('');
+  chart.data.datasets[0].data.push(value);
+  if(chart.data.labels.length > MAX_POINTS){
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+  chart.update('none');
+}
+
+/* ====== verdict logic ====== */
+function updateVerdict(gas){
+  const ring = document.getElementById('verdictRing');
+  const status = document.getElementById('verdictStatus');
+  const sub = document.getElementById('verdictSub');
+  const box = document.getElementById('verdictBox');
+
+  let color, label, sub_text, symbol;
+  if(gas > 20000){
+    color = 'var(--good)'; label='Good'; symbol='✓'; sub_text='Air is clean — no action needed';
+  } else if(gas > 10000){
+    color = 'var(--mid)'; label='Moderate'; symbol='!'; sub_text='Consider improving ventilation';
+  } else {
+    color = 'var(--bad)'; label='Poor'; symbol='✕'; sub_text='Ventilate the space now';
+  }
+  box.style.setProperty('--verdict-color', color);
+  ring.textContent = symbol;
+  status.textContent = label;
+  sub.textContent = sub_text;
+}
+
+/* ====== delta helper ====== */
+function setDelta(id, live, predicted, unit){
+  const el = document.getElementById(id);
+  if(predicted === undefined || predicted === null || predicted === ''){
+    el.textContent = 'no prediction yet';
+    el.className = 'card-delta';
+    return;
+  }
+  const diff = predicted - live;
+  const arrow = diff > 0.01 ? '▲' : diff < -0.01 ? '▼' : '→';
+  el.textContent = `${arrow} predicted ${predicted}${unit}`;
+  el.className = 'card-delta ' + (diff > 0.01 ? 'up' : diff < -0.01 ? 'down' : '');
+}
+
+/* ====== fetch loop ====== */
+async function fetchData(){
+  try {
+    const res = await fetch(SERVER_URL);
+    if(!res.ok) throw new Error('bad response');
+    const json = await res.json();
+    const live = json.live || {};
+    const predicted = json.predicted || {};
+
+    document.getElementById('connError').style.display = 'none';
+
+    if(live.temperature !== undefined){
+      document.getElementById('val-temp').textContent = live.temperature.toFixed(1);
+      pushPoint(charts.temp, live.temperature);
+      setDelta('delta-temp', live.temperature, predicted.temperature, '°C');
+    }
+    if(live.humidity !== undefined){
+      document.getElementById('val-hum').textContent = live.humidity.toFixed(1);
+      pushPoint(charts.hum, live.humidity);
+      setDelta('delta-hum', live.humidity, predicted.humidity, '%');
+    }
+    if(live.pressure !== undefined){
+      document.getElementById('val-pres').textContent = live.pressure.toFixed(1);
+      pushPoint(charts.pres, live.pressure);
+      setDelta('delta-pres', live.pressure, predicted.pressure, 'hPa');
+    }
+    if(live.gas_resistance !== undefined){
+      document.getElementById('val-gas').textContent = Math.round(live.gas_resistance).toLocaleString();
+      pushPoint(charts.gas, live.gas_resistance);
+      setDelta('delta-gas', live.gas_resistance, predicted.gas_resistance, 'Ω');
+      updateVerdict(live.gas_resistance);
+    }
+  } catch(err){
+    document.getElementById('connError').style.display = 'block';
+  }
+}
+
+setInterval(fetchData, 3000);
+fetchData();
+</script>
+</body>
+</html>
